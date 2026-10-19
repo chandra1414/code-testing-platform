@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}{{ attempt.test.title }}{% endblock %}
+{% block extra_head %}{% if has_code %}<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">{% endif %}{% endblock %}
+{% block content %}
+<div class="exam-topline"><div><div class="eyebrow">IN PROGRESS</div><h1 class="h3 fw-bold mb-1">{{ attempt.test.title }}</h1><span class="text-muted small">{{ questions|length }} questions · {{ attempt.test.total_marks }} marks</span></div><div class="timer-box"><span>TIME REMAINING</span><strong id="countdown" data-seconds="{{ remaining_seconds }}">--:--</strong></div></div>
+<form id="exam-form" method="post" action="{% url 'assessments:submit' attempt.id %}">{% csrf_token %}
+<div class="exam-layout"><aside class="question-sidebar"><h2 class="h6 fw-bold">Questions</h2><div class="question-nav">{% for question in questions %}<button type="button" class="question-jump {% if forloop.first %}active{% endif %}" data-index="{{ forloop.counter0 }}" aria-label="Question {{ forloop.counter }}">{{ forloop.counter }}</button>{% endfor %}</div><div class="question-legend"><span><i class="legend-dot answered"></i> Answered</span><span><i class="legend-dot"></i> Not answered</span><span><i class="legend-dot review"></i> Review</span></div><div class="exam-counts small text-muted"><span id="answered-count">0</span> answered · <span id="unanswered-count">0</span> unanswered · <span id="review-count">0</span> review</div><div class="exam-save-status small text-muted" id="save-status">Answers save as you go.</div></aside>
+<section class="card border-0 shadow-sm exam-content">
+{% for question in questions %}<div class="question-pane {% if not forloop.first %}d-none{% endif %}" data-index="{{ forloop.counter0 }}" data-question-id="{{ question.id }}">
+  <div class="d-flex justify-content-between mb-3"><span class="badge text-bg-light">Question {{ forloop.counter }} of {{ questions|length }}</span><span class="text-muted small">{{ question.marks }} marks</span></div><button type="button" class="btn btn-sm btn-outline-warning mb-3 review-toggle" data-marked="{% if question.existing_submission and question.existing_submission.marked_for_review %}true{% else %}false{% endif %}">{% if question.existing_submission and question.existing_submission.marked_for_review %}★ Marked for review{% else %}☆ Mark for review{% endif %}</button>
+  {% if question.question_type == "code" %}<h2 class="h5 fw-bold">{{ question.title|default:"Python problem" }}</h2><div class="question-text">{{ question.text|linebreaks }}</div>
+    {% if question.input_format %}<h3 class="h6 fw-bold mt-3">Input format</h3><p class="small text-muted">{{ question.input_format|linebreaksbr }}</p>{% endif %}
+    {% if question.output_format %}<h3 class="h6 fw-bold">Output format</h3><p class="small text-muted">{{ question.output_format|linebreaksbr }}</p>{% endif %}
+    {% if question.constraints %}<h3 class="h6 fw-bold">Constraints</h3><p class="small text-muted">{{ question.constraints|linebreaksbr }}</p>{% endif %}
+    {% if question.sample_input %}<div class="sample-panel"><strong>Sample input</strong><pre>{{ question.sample_input }}</pre><strong>Expected output</strong><pre>{{ question.sample_output }}</pre></div>{% endif %}
+    <label class="form-label fw-semibold mt-3" for="code-{{ question.id }}">Your Python solution</label><textarea class="form-control code-editor" id="code-{{ question.id }}" name="code_{{ question.id }}" data-code>{% if question.existing_submission %}{{ question.existing_submission.submitted_code }}{% else %}{{ question.starter_code }}{% endif %}</textarea>
+    <div class="d-flex align-items-center gap-2 mt-2"><button type="button" class="btn btn-sm btn-outline-primary run-code" data-url="{% url 'assessments:run' attempt.id %}">Run code on sample</button><span class="text-muted small">Runs only through the isolated sandbox service.</span></div><pre class="run-output d-none mt-2 mb-0" aria-live="polite"></pre><p class="text-muted small mt-2 mb-0">Without a configured sandbox, code evaluation is unavailable and no marks are awarded.</p>
+  {% else %}<h2 class="h5 fw-bold question-text">{{ question.text|linebreaks }}</h2><div class="option-list">{% for option in question.options.all %}<label class="option-choice"><input type="radio" name="question_{{ question.id }}" value="{{ option.id }}" {% if question.existing_submission and question.existing_submission.selected_option_id == option.id %}checked{% endif %}><span class="option-radio"></span><span>{{ option.text|linebreaksbr }}</span></label>{% empty %}<p class="text-danger small">This question has no options. Notify the test administrator.</p>{% endfor %}</div>{% endif %}
+  <div class="d-flex justify-content-between mt-4"><button type="button" class="btn btn-outline-secondary previous-question" {% if forloop.first %}disabled{% endif %}>← Previous</button><button type="button" class="btn btn-outline-primary next-question" {% if forloop.last %}disabled{% endif %}>Next question →</button></div>
+</div>{% endfor %}
+<div class="exam-submit-row"><span class="text-muted small">Review your answers before submitting. Submission cannot be undone.</span><button type="submit" class="btn btn-danger" id="submit-test">Submit assessment</button></div>
+</section></div></form>
+{% endblock %}
+{% block scripts %}
+{% if has_code %}<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>{% endif %}
+<script src="{% static 'js/exam.js' %}"></script>
+{% endblock %}

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+{% if is_admin %}
+<div class="page-heading"><div><div class="eyebrow">OVERVIEW</div><h1 class="h2 fw-bold">Admin dashboard</h1><p class="text-muted mb-0">A live view of your assessment platform.</p></div><a class="btn btn-primary" href="/django-admin/assessments/test/add/">＋ Create assessment</a></div>
+<div class="row g-3 mb-4">
+  <div class="col-6 col-xl-3"><div class="stat-card"><span>Students</span><strong>{{ student_count }}</strong><small>Registered learners</small></div></div>
+  <div class="col-6 col-xl-3"><div class="stat-card"><span>Assessments</span><strong>{{ test_count }}</strong><small>Created in the platform</small></div></div>
+  <div class="col-6 col-xl-3"><div class="stat-card"><span>Questions</span><strong>{{ question_count }}</strong><small>Across all assessments</small></div></div>
+  <div class="col-6 col-xl-3"><div class="stat-card"><span>Completions</span><strong>{{ completed_count }}</strong><small>Average {{ average_score|floatformat:1 }} marks</small></div></div>
+</div>
+<div class="row g-4">
+  <div class="col-xl-8"><div class="card border-0 shadow-sm content-card"><div class="card-body p-4"><div class="d-flex justify-content-between align-items-center mb-3"><div><h2 class="h5 fw-bold mb-1">Assessment management</h2><p class="text-muted small mb-0">Manage tests and questions with search, filters and pagination.</p></div><a href="/django-admin/assessments/test/" class="btn btn-sm btn-outline-primary">Manage tests</a></div>
+    <div class="table-responsive"><table class="table align-middle"><thead><tr><th>Assessment</th><th>Questions</th><th>Status</th><th></th></tr></thead><tbody>{% for test in tests %}<tr><td class="fw-semibold">{{ test.title }}</td><td>{{ test.question_count }}</td><td><span class="badge {% if test.is_published %}text-bg-success{% else %}text-bg-secondary{% endif %}">{% if test.is_published %}Published{% else %}Draft{% endif %}</span></td><td><a href="/django-admin/assessments/test/{{ test.id }}/change/">Edit</a> · <a href="{% url 'assessments:preview' test.id %}">Preview</a></td></tr>{% empty %}<tr><td colspan="4" class="text-muted">No assessments yet.</td></tr>{% endfor %}</tbody></table></div>
+    <div class="quick-links"><a href="/django-admin/assessments/question/">Questions</a><a href="/django-admin/auth/user/">Students & accounts</a><a href="/django-admin/assessments/testattempt/">Attempts & results</a><a href="{% url 'results:leaderboard' %}">Leaderboard</a></div>
+  </div></div></div>
+  <div class="col-xl-4"><div class="card border-0 shadow-sm content-card h-100"><div class="card-body p-4"><h2 class="h5 fw-bold">Recent completions</h2><div class="activity-list">{% for attempt in recent_attempts %}<div class="activity-item"><div class="avatar">{{ attempt.student.username|first|upper }}</div><div class="flex-grow-1"><strong>{{ attempt.student.get_full_name|default:attempt.student.username }}</strong><small>{{ attempt.test.title }}</small></div><span class="score-chip">{{ attempt.score|floatformat:1 }}</span></div>{% empty %}<p class="text-muted small mt-3">Completed assessments will appear here.</p>{% endfor %}</div><h3 class="h6 fw-bold mt-4">Top scores</h3>{% for attempt in top_attempts %}<div class="top-score-row"><span>{{ attempt.student.get_full_name|default:attempt.student.username }} <small>{{ attempt.test.title }}</small></span><strong>{{ attempt.score|floatformat:1 }}</strong></div>{% empty %}<p class="text-muted small">Top results will appear here.</p>{% endfor %}</div></div></div>
+</div>
+<div class="row g-4 mt-1"><div class="col-lg-6"><div class="card border-0 shadow-sm content-card"><div class="card-body p-4"><h2 class="h5 fw-bold">Test participation</h2><canvas id="participation-chart" height="130" aria-label="Test participation chart"></canvas></div></div></div><div class="col-lg-6"><div class="card border-0 shadow-sm content-card"><div class="card-body p-4"><h2 class="h5 fw-bold">Average score by test</h2><canvas id="performance-chart" height="130" aria-label="Average score by test chart"></canvas></div></div></div></div>
+{{ participation_labels|json_script:"participation-labels" }}{{ participation_values|json_script:"participation-values" }}{{ performance_labels|json_script:"performance-labels" }}{{ performance_values|json_script:"performance-values" }}
+{% else %}
+<div class="welcome-panel mb-4"><div><div class="eyebrow">STUDENT SPACE</div><h1 class="h2 fw-bold">Welcome, {{ student_name }}</h1><p class="mb-0">Ready to put your Python skills to the test?</p></div><a href="{% url 'results:leaderboard' %}" class="btn btn-light">View leaderboard <span aria-hidden="true">→</span></a></div>
+<div class="row g-3 mb-4"><div class="col-6 col-xl-4"><div class="stat-card"><span>Completed</span><strong>{{ completed_count }}</strong><small>Assessments submitted</small></div></div><div class="col-6 col-xl-4"><div class="stat-card"><span>Average score</span><strong>{{ average_score|floatformat:1 }}</strong><small>Across completed attempts</small></div></div><div class="col-12 col-xl-4"><div class="stat-card"><span>Personal best</span><strong>{{ best_score|floatformat:1 }}</strong><small>Highest marks achieved</small></div></div></div>
+<div class="card border-0 shadow-sm content-card mb-4"><div class="card-body p-4"><h2 class="h5 fw-bold">Your performance</h2><p class="small text-muted">Score percentage from your six most recent completed assessments.</p><canvas id="performance-chart" height="90" aria-label="Your performance chart"></canvas></div></div>
+{{ performance_labels|json_script:"performance-labels" }}{{ performance_values|json_script:"performance-values" }}
+<div class="page-heading"><div><h2 class="h4 fw-bold">Available assessments</h2><p class="text-muted">Choose an assessment and start when you're ready.</p></div><a href="{% url 'results:history' %}" class="btn btn-outline-primary">Test history</a></div>
+<div class="row g-3 mb-4">{% for test in available_tests %}<div class="col-md-6 col-xl-4"><article class="test-card h-100"><div class="d-flex justify-content-between align-items-start"><span class="test-icon">⌘</span><span class="badge rounded-pill {% if test.student_status == 'Available' %}text-bg-success{% elif test.student_status == 'Upcoming' %}text-bg-warning{% else %}text-bg-secondary{% endif %}">{{ test.student_status }}</span></div><h3 class="h5 fw-bold mt-3">{{ test.title }}</h3><p class="text-muted small test-description">{{ test.description|default:"A focused assessment to help measure your skills."|truncatewords:22 }}</p><div class="test-meta"><span>{{ test.duration_minutes }} min</span><span>{{ test.question_count }} questions</span><span>{{ test.total_marks }} marks</span></div><a class="btn btn-primary w-100 mt-3" href="{% url 'assessments:list' %}">View assessment</a></article></div>{% empty %}<div class="col"><div class="empty-state">No assessments are available right now. Please check back later.</div></div>{% endfor %}</div>
+<div class="card border-0 shadow-sm content-card"><div class="card-body p-4"><div class="d-flex justify-content-between"><h2 class="h5 fw-bold">Recent results</h2><a href="{% url 'results:history' %}">View all</a></div>{% for attempt in recent_attempts %}<div class="result-row"><div><strong>{{ attempt.test.title }}</strong><small>{{ attempt.submitted_at|date:"M j, Y · H:i" }}</small></div><div class="text-end"><strong>{{ attempt.score|floatformat:1 }} / {{ attempt.test.total_marks }}</strong><small>{% if attempt.score >= attempt.test.passing_marks %}Passed{% else %}Keep practicing{% endif %}</small></div><a class="stretched-link" href="{% url 'results:detail' attempt.id %}" aria-label="View {{ attempt.test.title }} result"></a></div>{% empty %}<p class="text-muted mb-0">Your submitted test results will show up here.</p>{% endfor %}</div></div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+(() => {
+  const read = (id) => JSON.parse(document.getElementById(id).textContent);
+  const performance = document.getElementById("performance-chart");
+  const participation = document.getElementById("participation-chart");
+  if (performance && !participation && read("performance-labels").length) {
+    new Chart(performance, {
+      type: "line",
+      data: { labels: read("performance-labels"), datasets: [{ label: "Score (%)", data: read("performance-values"), borderColor: "#5755d9", backgroundColor: "rgba(87,85,217,.12)", fill: true, tension: .35 }] },
+      options: { responsive: true, scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } },
+    });
+  }
+  if (participation) {
+    new Chart(participation, {
+      type: "bar",
+      data: { labels: read("participation-labels"), datasets: [{ label: "Completed attempts", data: read("participation-values"), backgroundColor: "#7775e8", borderRadius: 6 }] },
+      options: { responsive: true, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }, plugins: { legend: { display: false } } },
+    });
+    new Chart(document.getElementById("performance-chart"), {
+      type: "bar",
+      data: { labels: read("performance-labels"), datasets: [{ label: "Average (%)", data: read("performance-values"), backgroundColor: "#43b486", borderRadius: 6 }] },
+      options: { responsive: true, scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } },
+    });
+  }
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}My profile{% endblock %}
+{% block content %}
+<div class="page-heading"><div><div class="eyebrow">ACCOUNT</div><h1 class="h2 fw-bold">My profile</h1><p class="text-muted">Keep your account details up to date.</p></div></div>
+<div class="card border-0 shadow-sm content-card"><div class="card-body p-4">
+<form method="post" class="form-narrow">{% csrf_token %}
+{% for field in form %}<div class="mb-3"><label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>{% endfor %}
+<button class="btn btn-primary">Save profile</button></form></div></div>
+{% endblock %}

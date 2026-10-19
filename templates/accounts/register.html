@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Create account{% endblock %}
+{% block content %}
+<section class="auth-card card border-0 shadow-sm mx-auto">
+  <div class="card-body p-4 p-md-5">
+    <div class="eyebrow">GET STARTED</div><h1 class="h3 fw-bold mt-2">Create your account</h1>
+    <p class="text-muted mb-4">Join as a student and take your first assessment.</p>
+    <form method="post">{% csrf_token %}
+      {% for field in form %}<div class="mb-3"><label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<div class="form-text">{{ field.help_text|safe }}</div>{% endif %}{% for error in field.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}</div>{% endfor %}
+      <button class="btn btn-primary w-100 mt-2">Create account</button>
+    </form>
+    <p class="text-center text-muted mt-4 mb-0">Already registered? <a href="{% url 'accounts:login' %}">Sign in</a></p>
+  </div>
+</section>
+{% endblock %}
