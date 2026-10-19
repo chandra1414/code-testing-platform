@@ -24,7 +24,7 @@ Correct option flags and hidden test cases are only included in staff forms/admi
 
 ## Installation and local setup
 
-1. Install Python 3.11+ and (for MySQL) a MySQL server and its development client libraries.
+1. Install Python 3.11+ and (for MySQL) a MySQL server.
 2. Create and activate a virtual environment, then run `pip install -r requirements.txt`.
 3. Copy `.env.example` to `.env` and set a private `DJANGO_SECRET_KEY`. By default the app uses SQLite. For MySQL, create the database and a least-privilege application account, then set `DB_ENGINE=mysql`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, and `DB_PORT`:
 
@@ -75,3 +75,42 @@ git push -u origin main
 ```
 
 On Render (or another Django-compatible host), connect that repository, use `pip install -r requirements.txt` as the build command and `python manage.py migrate && python manage.py collectstatic --noinput` as the release command. Start with `gunicorn online_test_platform.wsgi:application`. Provision a compatible managed MySQL database separately, configure all `DB_*` settings and `DJANGO_*` secrets in the host's environment dashboard, and use the deployed host name in `DJANGO_ALLOWED_HOSTS`. Create the first administrator with the provider's one-off shell using `python manage.py createsuperuser`. Configure HTTPS and production environment values before exposing the service publicly. `check --deploy` reports that HSTS preload is opt-in; enable `DJANGO_HSTS_PRELOAD=True` only after confirming every subdomain will remain HTTPS-only.
+
+### Vercel deployment
+
+The repository includes `vercel.json`; Vercel detects `manage.py` and the WSGI application at `online_test_platform/wsgi.py`. It collects and serves static files during deployment. PyMySQL is used as the MySQL driver to avoid a native MySQL client build dependency.
+
+1. Push this repository to GitHub and import it from the Vercel dashboard (**Add New → Project**). Keep Vercel's automatic Django build settings; no custom build command is needed.
+2. Provision a **separate, persistent MySQL database** reachable from Vercel Functions. Vercel's filesystem is ephemeral and must not be used for SQLite or application uploads.
+3. Add these environment variables in Vercel for Production (and Preview if needed):
+
+   ```text
+   DJANGO_DEBUG=False
+   DJANGO_SECRET_KEY=<a newly generated, private random secret>
+   DJANGO_ALLOWED_HOSTS=<your production domain, e.g. my-app.vercel.app>
+   DJANGO_CSRF_TRUSTED_ORIGINS=https://<your production domain>
+   DB_ENGINE=mysql
+   DB_NAME=<database name from MySQL provider>
+   DB_USER=<database user>
+   DB_PASSWORD=<database password>
+   DB_HOST=<database host>
+   DB_PORT=<database port>
+   DB_CONN_MAX_AGE=0
+   ```
+
+   Never commit these values. Vercel's `VERCEL_URL`, `VERCEL_BRANCH_URL`, and `VERCEL_PROJECT_PRODUCTION_URL` are added as allowed hosts/CSRF origins automatically. Add any custom domain to both Django host/origin variables. Vercel deployments fail fast if production mode or MySQL configuration is missing instead of silently falling back to temporary SQLite.
+4. Deploy. To apply migrations, install the Vercel CLI and pull the **Production** environment locally:
+
+   ```powershell
+   npm install --global vercel
+   vercel login
+   vercel link
+   vercel env pull .env.local --environment=production
+   .\.venv\Scripts\python.exe manage.py migrate
+   .\.venv\Scripts\python.exe manage.py createsuperuser
+   ```
+
+   Run these commands only from a trusted computer; `.env.local` is git-ignored. They connect to the production MySQL database, so use them intentionally. Do not run database migrations during every Vercel build.
+5. Check the deployment URL, sign in to `/django-admin/`, and verify registration, database writes, and static assets. Configure an isolated code runner separately if Python answers should be evaluated.
+
+Vercel is a serverless runtime: database connections default to non-persistent (`DB_CONN_MAX_AGE=0`), while login and code-run throttling use Django's local-memory cache and therefore are not shared across function instances. Use a shared cache or provider-level rate limiting before relying on those throttles at scale.

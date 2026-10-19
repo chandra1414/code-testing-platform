@@ -4,16 +4,38 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env.local")
 load_dotenv(BASE_DIR / ".env")
 
+IS_VERCEL = os.getenv("VERCEL", "").lower() in {"1", "true", "yes"}
 DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() in {"1", "true", "yes"}
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "")
 if not SECRET_KEY:
-    if DEBUG:
+    if DEBUG and not IS_VERCEL:
         SECRET_KEY = "insecure-development-key-change-before-deployment"
     else:
         raise RuntimeError("DJANGO_SECRET_KEY must be configured when DEBUG is disabled.")
-ALLOWED_HOSTS = [host.strip() for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if host.strip()]
+if IS_VERCEL and DEBUG:
+    raise RuntimeError("Set DJANGO_DEBUG=False in the Vercel project environment.")
+
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    if host.strip()
+]
+VERCEL_HOSTS = {
+    os.getenv(name, "").strip().removeprefix("https://").removeprefix("http://").rstrip("/")
+    for name in ("VERCEL_URL", "VERCEL_BRANCH_URL", "VERCEL_PROJECT_PRODUCTION_URL")
+}
+ALLOWED_HOSTS.extend(host for host in VERCEL_HOSTS if host and host not in ALLOWED_HOSTS)
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip().rstrip("/")
+    for origin in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",")
+    if origin.strip()
+]
+CSRF_TRUSTED_ORIGINS.extend(
+    origin for origin in (f"https://{host}" for host in VERCEL_HOSTS if host) if origin not in CSRF_TRUSTED_ORIGINS
+)
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -58,17 +80,26 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "online_test_platform.wsgi.application"
 
-if os.getenv("DB_ENGINE", "").lower() == "mysql":
+DB_ENGINE = os.getenv("DB_ENGINE", "").lower()
+if IS_VERCEL and DB_ENGINE != "mysql":
+    raise RuntimeError("Vercel requires DB_ENGINE=mysql; SQLite is not persistent on Vercel.")
+
+if DB_ENGINE == "mysql":
+    required_db_settings = ("DB_NAME", "DB_USER", "DB_PASSWORD", "DB_HOST")
+    missing_db_settings = [name for name in required_db_settings if not os.getenv(name)]
+    if missing_db_settings:
+        raise RuntimeError(f"Missing MySQL environment variables: {', '.join(missing_db_settings)}")
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.mysql",
-            "NAME": os.getenv("DB_NAME", ""),
-            "USER": os.getenv("DB_USER", ""),
-            "PASSWORD": os.getenv("DB_PASSWORD", ""),
+            "NAME": os.environ["DB_NAME"],
+            "USER": os.environ["DB_USER"],
+            "PASSWORD": os.environ["DB_PASSWORD"],
             "HOST": os.getenv("DB_HOST", "127.0.0.1"),
             "PORT": os.getenv("DB_PORT", "3306"),
             "OPTIONS": {"charset": "utf8mb4"},
-            "CONN_MAX_AGE": 60,
+            "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "0" if IS_VERCEL else "60")),
+            "CONN_HEALTH_CHECKS": True,
         }
     }
 else:
@@ -101,8 +132,11 @@ CSRF_COOKIE_SECURE = not DEBUG
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
 SECURE_REFERRER_POLICY = "same-origin"
-if not DEBUG:
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+if IS_VERCEL or not DEBUG:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+if not DEBUG:
     SECURE_SSL_REDIRECT = os.getenv("DJANGO_SSL_REDIRECT", "True").lower() in {"1", "true", "yes"}
     SECURE_HSTS_SECONDS = 31_536_000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
